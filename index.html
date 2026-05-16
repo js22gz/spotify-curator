@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curator • Spotify</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
+        
+        :root {
+            --spotify-green: #1DB954;
+        }
+        
+        body {
+            font-family: 'Inter', system_ui, sans-serif;
+        }
+        
+        .font-display {
+            font-family: 'Space Grotesk', 'Inter', system_ui, sans-serif;
+            font-weight: 600;
+        }
+
+        .clean-table {
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        
+        .clean-table tr {
+            transition: background-color 0.1s ease;
+        }
+        
+        .clean-table tr:hover {
+            background-color: #18181b;
+        }
+        
+        .clean-table tr.selected {
+            background-color: #052e16;
+            position: relative;
+        }
+        
+        .clean-table tr.selected::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background-color: #22c55e;
+        }
+
+        .section-header {
+            font-size: 13px;
+            letter-spacing: -.5px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .track-row {
+            cursor: pointer;
+        }
+
+        .metric {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .camelot-pill {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-weight: 700;
+            letter-spacing: -.5px;
+        }
+
+        .mix-analysis {
+            animation: fadeIn 0.2s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .playlist-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .playlist-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        .nav-active {
+            color: white;
+            border-bottom: 2px solid #22c55e;
+        }
+
+        .subtle-divider {
+            border-color: #27272a;
+        }
+
+        .modern-input {
+            background-color: #18181b;
+            border: 1px solid #3f3f46;
+            transition: all 0.2s ease;
+        }
+        
+        .modern-input:focus {
+            border-color: #22c55e;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+            outline: none;
+        }
+
+        .data-table th {
+            font-weight: 500;
+            color: #71717a;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+    <!-- Top Navigation -->
+    <nav class="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-lg sticky top-0 z-50">
+        <div class="max-w-screen-2xl mx-auto">
+            <div class="px-8 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-x-3">
+                    <!-- Logo -->
+                    <div class="flex items-center gap-x-2.5">
+                        <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-inner">
+                            <i class="fa-solid fa-magic text-zinc-950 text-2xl"></i>
+                        </div>
+                        <div>
+                            <span class="font-display text-3xl font-semibold tracking-tighter">Curator</span>
+                        </div>
+                    </div>
+                    <div class="px-3 py-1 bg-zinc-900 rounded-3xl text-xs font-medium flex items-center gap-x-1.5 border border-zinc-800">
+                        <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                        <span class="text-emerald-400 text-xs font-semibold">MVP</span>
+                    </div>
+                </div>
+
+                <div id="user-section" class="hidden items-center gap-x-4">
+                    <div class="flex items-center gap-x-3">
+                        <div id="user-avatar" 
+                             class="w-8 h-8 rounded-2xl overflow-hidden ring-2 ring-zinc-800 bg-zinc-800 flex-shrink-0">
+                        </div>
+                        <div>
+                            <div id="user-name" class="font-semibold text-sm"></div>
+                            <div class="text-[10px] text-zinc-500 -mt-0.5">Spotify</div>
+                        </div>
+                    </div>
+                    <button onclick="logout()" 
+                            class="flex items-center gap-x-2 px-4 py-2 text-sm font-medium rounded-3xl border border-zinc-700 hover:bg-zinc-900 transition-colors">
+                        <i class="fa-solid fa-sign-out-alt text-xs"></i>
+                        <span class="hidden sm:inline">Disconnect</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-screen-2xl mx-auto px-8 pt-8 pb-16">
+        
+        <!-- Auth / Hero Section -->
+        <div id="auth-section">
+            <div class="max-w-2xl mx-auto text-center pt-12 pb-16">
+                <div class="inline-flex items-center gap-x-2 px-4 py-1.5 rounded-3xl bg-zinc-900 border border-zinc-800 mb-6">
+                    <i class="fa-solid fa-headset text-emerald-400"></i>
+                    <span class="text-sm font-medium">For DJs, curators & playlist architects</span>
+                </div>
+                
+                <h1 class="text-7xl font-display font-semibold tracking-tighter leading-none mb-4">
+                    Curate with<br>musical intelligence.
+                </h1>
+                <p class="text-xl text-zinc-400 max-w-md mx-auto">
+                    Analyze BPM, keys, and harmonic mixing compatibility directly from your Spotify playlists.
+                </p>
+                
+                <div class="mt-10">
+                    <button onclick="loginWithSpotify()"
+                            class="group inline-flex items-center justify-center gap-x-3 bg-white hover:bg-zinc-100 active:bg-zinc-200 transition-all text-zinc-950 font-semibold px-8 h-14 rounded-3xl text-base shadow-xl shadow-emerald-950/50">
+                        <i class="fa-brands fa-spotify text-2xl group-active:scale-95 transition-transform"></i>
+                        <span>Connect with Spotify</span>
+                    </button>
+                    <p class="text-xs text-zinc-500 mt-4">We'll only read your playlists. No writing permission needed.</p>
+                </div>
+            </div>
+            
+            <!-- Features -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
+                <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+                    <div class="flex items-center gap-x-3 mb-3">
+                        <i class="fa-solid fa-tachometer-alt text-emerald-400 w-5"></i>
+                        <span class="font-semibold">BPM Analysis</span>
+                    </div>
+                    <p class="text-sm text-zinc-400">See exact tempo for every track and understand transition difficulty at a glance.</p>
+                </div>
+                <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+                    <div class="flex items-center gap-x-3 mb-3">
+                        <i class="fa-solid fa-key text-emerald-400 w-5"></i>
+                        <span class="font-semibold">Camelot + Standard Keys</span>
+                    </div>
+                    <p class="text-sm text-zinc-400">View both traditional key notation and the DJ-favorite Camelot wheel system.</p>
+                </div>
+                <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+                    <div class="flex items-center gap-x-3 mb-3">
+                        <i class="fa-solid fa-link text-emerald-400 w-5"></i>
+                        <span class="font-semibold">Mix Compatibility</span>
+                    </div>
+                    <p class="text-sm text-zinc-400">Instant feedback on how well any track flows from the previous and into the next.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main App (hidden until logged in) -->
+        <div id="main-app" class="hidden">
+            <div class="flex items-end justify-between mb-6">
+                <div>
+                    <h2 class="font-display text-4xl tracking-tighter font-semibold">Your Playlists</h2>
+                    <p class="text-zinc-400 mt-1">Select a playlist to start curating</p>
+                </div>
+                
+                <div class="flex items-center gap-x-3">
+                    <div class="relative w-72">
+                        <input type="text" id="playlist-search" 
+                               oninput="filterPlaylists()"
+                               placeholder="Search playlists..." 
+                               class="modern-input w-full pl-10 pr-4 py-2.5 text-sm rounded-3xl">
+                        <i class="fa-solid fa-search absolute left-4 top-3.5 text-zinc-500"></i>
+                    </div>
+                    <button onclick="refreshPlaylists()" 
+                            class="flex items-center justify-center w-11 h-11 rounded-3xl border border-zinc-700 hover:bg-zinc-900 transition-colors">
+                        <i class="fa-solid fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Playlists Grid -->
+            <div id="playlists-grid" 
+                 class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
+                <!-- Populated by JS -->
+            </div>
+
+            <!-- Playlist Detail View -->
+            <div id="playlist-detail" class="hidden mt-10">
+                <!-- Playlist Header -->
+                <div class="flex items-start gap-x-6 mb-8">
+                    <div id="playlist-cover" 
+                         class="w-36 h-36 rounded-3xl overflow-hidden flex-shrink-0 shadow-2xl ring-1 ring-zinc-800 bg-zinc-900">
+                    </div>
+                    
+                    <div class="flex-1 min-w-0 pt-1">
+                        <div class="flex items-center gap-x-3">
+                            <span class="px-3 py-1 text-xs font-bold tracking-widest bg-emerald-500/10 text-emerald-400 rounded-2xl">PLAYLIST</span>
+                            <span id="playlist-track-count" class="text-sm text-zinc-400"></span>
+                        </div>
+                        
+                        <h3 id="playlist-name" class="font-display text-5xl font-semibold tracking-tighter mt-1 mb-1"></h3>
+                        <p id="playlist-description" class="text-zinc-400 text-[15px] line-clamp-2 max-w-2xl"></p>
+                        
+                        <div class="flex items-center gap-x-4 mt-4">
+                            <button onclick="deselectPlaylist()"
+                                    class="text-sm flex items-center gap-x-2 px-5 h-9 rounded-3xl border border-zinc-700 hover:bg-zinc-900 transition-colors">
+                                <i class="fa-solid fa-arrow-left text-xs"></i>
+                                <span>Back to playlists</span>
+                            </button>
+                            
+                            <div class="text-xs px-3 py-1 bg-zinc-900 border border-zinc-700 rounded-2xl flex items-center gap-x-1.5">
+                                <i class="fa-solid fa-info-circle text-emerald-400"></i>
+                                <span class="text-zinc-400">Click any track to analyze mixing context</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="flex items-center justify-between mb-3 px-1">
+                    <div class="flex items-center gap-x-4">
+                        <div>
+                            <span class="section-header text-zinc-400">Tracks</span>
+                            <span id="tracks-count-badge" 
+                                  class="ml-2 text-xs font-mono px-2.5 py-px bg-zinc-800 rounded-2xl"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-x-3">
+                        <!-- Search -->
+                        <div class="relative w-80">
+                            <input type="text" id="track-search" 
+                                   oninput="filterTracks()"
+                                   placeholder="Filter tracks by name, artist..." 
+                                   class="modern-input w-full pl-10 pr-4 py-2 text-sm rounded-3xl">
+                            <i class="fa-solid fa-search absolute left-4 top-2.5 text-zinc-500 text-sm"></i>
+                        </div>
+                        
+                        <button onclick="clearTrackSelection()"
+                                class="px-4 h-9 text-sm flex items-center gap-x-2 rounded-3xl border border-zinc-700 hover:bg-zinc-900 transition-colors">
+                            <i class="fa-solid fa-times text-xs"></i>
+                            <span>Clear selection</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Main Content: Table + Analysis -->
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                    
+                    <!-- Tracks Table -->
+                    <div class="xl:col-span-7 2xl:col-span-8">
+                        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+                            <div class="overflow-auto max-h-[620px]" id="table-wrapper">
+                                <table class="clean-table w-full text-sm">
+                                    <thead class="sticky top-0 bg-zinc-900 z-10">
+                                        <tr class="border-b border-zinc-800">
+                                            <th class="w-12 px-6 py-4 text-left font-medium">#</th>
+                                            <th class="px-2 py-4 text-left font-medium min-w-[260px]">Track</th>
+                                            <th class="px-4 py-4 text-left font-medium">Artist</th>
+                                            <th class="w-24 px-4 py-4 text-center font-medium">BPM</th>
+                                            <th class="px-4 py-4 text-left font-medium min-w-[140px]">Key</th>
+                                            <th class="w-20 px-6 py-4 text-center font-medium">Camelot</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tracks-tbody" class="divide-y divide-zinc-800 text-sm">
+                                        <!-- Populated dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="px-1 mt-2 text-[10px] text-zinc-500 flex items-center gap-x-2">
+                            <i class="fa-solid fa-info-circle"></i>
+                            <span>Playlist order is preserved. Use search to narrow results.</span>
+                        </div>
+                    </div>
+
+                    <!-- Mixing Analysis Panel -->
+                    <div class="xl:col-span-5 2xl:col-span-4">
+                        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl h-full flex flex-col">
+                            <div class="px-6 pt-5 pb-4 border-b border-zinc-800">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <span class="section-header">Mixing Context</span>
+                                    </div>
+                                    <div id="selection-status" 
+                                         class="text-xs px-3 py-1 rounded-2xl bg-zinc-800 text-zinc-400 font-medium">
+                                        No track selected
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="analysis-content" class="flex-1 p-6 overflow-auto">
+                                <!-- Dynamic content injected here -->
+                                <div class="h-full flex flex-col items-center justify-center text-center px-6 py-8">
+                                    <div class="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center mb-4">
+                                        <i class="fa-solid fa-link text-2xl text-zinc-600"></i>
+                                    </div>
+                                    <p class="font-medium text-zinc-300">Select a track</p>
+                                    <p class="text-xs text-zinc-500 mt-1 max-w-[200px]">
+                                        Click any row in the table to see how it mixes with the tracks before and after it.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="border-t border-zinc-800 py-5 text-center">
+        <div class="max-w-screen-2xl mx-auto px-8 text-xs text-zinc-500">
+            Spotify Curator • MVP • Made for personal use. 
+            <span class="hidden sm:inline">• Replace <code class="font-mono">CLIENT_ID</code> with your own Spotify app credentials.</span>
+        </div>
+    </footer>
+
+    <script>
+        // ==================== CONFIG ====================
+        const CLIENT_ID = 'PASTE_YOUR_SPOTIFY_CLIENT_ID_HERE'; // ←←← REPLACE THIS
+        const REDIRECT_URI = window.location.origin + window.location.pathname;
+        const SCOPES = 'playlist-read-private user-read-private';
+
+        // ==================== STATE ====================
+        let accessToken = null;
+        let currentUser = null;
+        let allPlaylists = [];
+        let currentPlaylist = null;
+        let currentTracks = [];
+        let filteredTracks = [];
+        let selectedTrackId = null;
+
+        // ==================== TAILWIND CONFIG ====================
+        function initTailwind() {
+            document.documentElement.style.setProperty('--accent', '#22c55e');
+            
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: {
+                            'display': ['Space Grotesk', 'Inter', 'system-ui', 'sans-serif']
+                        }
+                    }
+                }
+            };
+        }
+
+        // ==================== KEY / CAMELOT HELPERS ====================
+        function getKeyString(key, mode) {
+            const notes = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+            const note = notes[key] || '—';
+            const modeStr = mode === 1 ? 'Major' : 'Minor';
+            return `${note} ${modeStr}`;
+        }
+
+        function getCamelot(key, mode) {
+            const majorMap = {
+                0: '8B', 1: '3B', 2: '10B', 3: '5B', 4: '12B', 5: '7B',
+                6: '2B', 7: '9B', 8: '4B', 9: '11B', 10: '6B', 11: '1B'
+            };
+            const minorMap = {
+                0: '5A', 1: '12A', 2: '7A', 3: '2A', 4: '9A', 5: '4A',
+                6: '11A', 7: '6A', 8: '1A', 9: '8A', 10: '3A', 11: '10A'
+            };
+            if (mode === 1) return majorMap[key] || '—';
+            return minorMap[key] || '—';
+        }
+
+        function analyzeTransition(trackA, trackB) {
+            if (!trackA?.audio || !trackB?.audio) {
+                return {
+                    bpmDiff: null,
+                    bpmNote: 'BPM data unavailable',
+                    keyNote: 'Key data unavailable',
+                    compatLevel: 'unknown'
+                };
+            }
+
+            const bpmA = trackA.audio.tempo;
+            const bpmB = trackB.audio.tempo;
+            const bpmDiff = Math.abs(bpmA - bpmB);
+
+            let bpmNote = '';
+            if (bpmDiff < 3) bpmNote = 'Extremely close — seamless beatmatching';
+            else if (bpmDiff < 6) bpmNote = 'Very close — easy to blend naturally';
+            else if (bpmDiff < 10) bpmNote = 'Good range — comfortable transition';
+            else if (bpmDiff < 18) bpmNote = 'Moderate difference — pitch adjustment helpful';
+            else bpmNote = 'Large gap — consider as section change or use tempo tools';
+
+            // Camelot analysis
+            const c1 = trackA.audio.camelot;
+            const c2 = trackB.audio.camelot;
+            let keyNote = '';
+            let compatLevel = 'low';
+
+            if (c1 === c2) {
+                keyNote = 'Perfect key match — ideal for extended blends and long mixes';
+                compatLevel = 'perfect';
+            } else if (c1.slice(0, -1) === c2.slice(0, -1)) {
+                keyNote = 'Relative major/minor — excellent harmonic compatibility and emotional flow';
+                compatLevel = 'excellent';
+            } else {
+                const n1 = parseInt(c1);
+                const n2 = parseInt(c2);
+                let diff = Math.abs(n1 - n2);
+                diff = Math.min(diff, 12 - diff);
+
+                if (diff === 1) {
+                    keyNote = 'Adjacent on Camelot wheel — strong energy progression';
+                    compatLevel = 'great';
+                } else if (diff === 2) {
+                    keyNote = 'Close on the wheel — reliable choice for building or releasing energy';
+                    compatLevel = 'good';
+                } else if (diff <= 4) {
+                    keyNote = 'Moderate compatibility — works well with attentive mixing';
+                    compatLevel = 'moderate';
+                } else {
+                    keyNote = 'Distant keys — noticeable shift. Best used between distinct sections';
+                    compatLevel = 'low';
+                }
+            }
+
+            return { bpmDiff, bpmNote, keyNote, compatLevel };
+        }
+
+        // ==================== AUTH ====================
+        function loginWithSpotify() {
+            if (CLIENT_ID === 'PASTE_YOUR_SPOTIFY_CLIENT_ID_HERE') {
+                alert('Please replace CLIENT_ID in the HTML with your Spotify App Client ID first.\n\nGo to developer.spotify.com → Create an app → Copy the Client ID.');
+                return;
+            }
+            
+            const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&show_dialog=true`;
+            window.location.href = authUrl;
+        }
+
+        function getTokenFromUrl() {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            return params.get('access_token');
+        }
+
+        function logout() {
+            sessionStorage.removeItem('spotify_token');
+            accessToken = null;
+            currentUser = null;
+            window.location.reload();
+        }
+
+        async function fetchCurrentUser() {
+            try {
+                const user = await spotifyFetch('/me');
+                currentUser = user;
+                renderUserHeader();
+            } catch (e) {
+                console.error('Failed to fetch user', e);
+            }
+        }
+
+        function renderUserHeader() {
+            const section = document.getElementById('user-section');
+            if (!currentUser) return;
+
+            section.classList.remove('hidden');
+            section.classList.add('flex');
+
+            document.getElementById('user-name').textContent = currentUser.display_name || 'Spotify User';
+
+            const avatarContainer = document.getElementById('user-avatar');
+            if (currentUser.images && currentUser.images.length > 0) {
+                avatarContainer.innerHTML = `<img src="${currentUser.images[0].url}" class="w-full h-full object-cover">`;
+            } else {
+                avatarContainer.innerHTML = `<div class="w-full h-full bg-zinc-700 flex items-center justify-center"><i class="fa-solid fa-user text-zinc-400"></i></div>`;
+            }
+        }
+
+        // ==================== API HELPERS ====================
+        async function spotifyFetch(endpoint) {
+            if (!accessToken) throw new Error('No access token');
+
+            const res = await fetch(`https://api.spotify.com/v1${endpoint}`, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            });
+
+            if (!res.ok) {
+                if (res.status === 401) {
+                    alert('Session expired. Please reconnect your Spotify account.');
+                    logout();
+                }
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.error?.message || `Spotify API error: ${res.status}`);
+            }
+            return res.json();
+        }
+
+        async function loadUserPlaylists() {
+            try {
+                const data = await spotifyFetch('/me/playlists?limit=50');
+                allPlaylists = data.items || [];
+                renderPlaylists(allPlaylists);
+            } catch (error) {
+                console.error(error);
+                document.getElementById('playlists-grid').innerHTML = 
+                    `<div class="col-span-full p-8 text-center text-red-400">Failed to load playlists. ${error.message}</div>`;
+            }
+        }
+
+        async function getAllPlaylistTracks(playlistId) {
+            let tracks = [];
+            let offset = 0;
+            const limit = 100;
+
+            while (true) {
+                const data = await spotifyFetch(
+                    `/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}&fields=items(track(id,name,artists,album(name,images),duration_ms)),next`
+                );
+                
+                const validItems = data.items.filter(item => item.track && item.track.id);
+                tracks.push(...validItems.map(item => item.track));
+                
+                if (!data.next) break;
+                offset += limit;
+            }
+            return tracks;
+        }
+
+        async function getAudioFeaturesForTracks(trackIds) {
+            const featuresMap = {};
+            if (!trackIds.length) return featuresMap;
+
+            for (let i = 0; i < trackIds.length; i += 100) {
+                const batch = trackIds.slice(i, i + 100);
+                const ids = batch.join(',');
+                
+                try {
+                    const data = await spotifyFetch(`/audio-features?ids=${ids}`);
+                    if (data.audio_features) {
+                        data.audio_features.forEach(feature => {
+                            if (feature && feature.id) {
+                                featuresMap[feature.id] = {
+                                    ...feature,
+                                    camelot: getCamelot(feature.key, feature.mode),
+                                    keyString: getKeyString(feature.key, feature.mode)
+                                };
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch audio features for batch', e);
+                }
+            }
+            return featuresMap;
+        }
+
+        // ==================== RENDERING ====================
+        function renderPlaylists(playlistsToShow) {
+            const container = document.getElementById('playlists-grid');
+            container.innerHTML = '';
+
+            if (!playlistsToShow.length) {
+                container.innerHTML = `<div class="col-span-full py-12 text-center"><p class="text-zinc-400">No playlists found.</p></div>`;
+                return;
+            }
+
+            playlistsToShow.forEach(playlist => {
+                const card = document.createElement('div');
+                card.className = `playlist-card group bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-3xl overflow-hidden cursor-pointer`;
+                
+                const coverUrl = playlist.images?.[0]?.url || 'https://picsum.photos/id/1015/300/300';
+                
+                card.innerHTML = `
+                    <div class="relative">
+                        <img src="${coverUrl}" class="w-full aspect-square object-cover" alt="${playlist.name}">
+                        <div class="absolute inset-0 bg-gradient-to-b from-black/10 via-black/30 to-black/70"></div>
+                        
+                        <div class="absolute bottom-0 left-0 right-0 p-4">
+                            <div class="font-semibold text-white text-[15px] leading-tight line-clamp-2 pr-2">${playlist.name}</div>
+                            <div class="flex items-center justify-between mt-2">
+                                <div class="text-xs text-white/70">${playlist.tracks.total} tracks</div>
+                                ${playlist.owner?.display_name ? `<div class="text-[10px] px-2 py-px bg-white/10 rounded-xl text-white/60">${playlist.owner.display_name}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                card.onclick = () => selectPlaylist(playlist);
+                container.appendChild(card);
+            });
+        }
+
+        function filterPlaylists() {
+            const query = document.getElementById('playlist-search').value.toLowerCase().trim();
+            if (!query) {
+                renderPlaylists(allPlaylists);
+            } else {
+                const filtered = allPlaylists.filter(p => 
+                    p.name.toLowerCase().includes(query) || 
+                    (p.owner?.display_name || '').toLowerCase().includes(query)
+                );
+                renderPlaylists(filtered);
+            });
+        }
+
+        async function selectPlaylist(playlist) {
+            currentPlaylist = playlist;
+            selectedTrackId = null;
+
+            // Show detail view
+            document.getElementById('playlists-grid').classList.add('hidden');
+            document.getElementById('playlist-detail').classList.remove('hidden');
+
+            // Header
+            document.getElementById('playlist-name').textContent = playlist.name;
+            document.getElementById('playlist-description').textContent = playlist.description || 'No description';
+            document.getElementById('playlist-track-count').textContent = `${playlist.tracks.total} tracks`;
+
+            const coverContainer = document.getElementById('playlist-cover');
+            const coverUrl = playlist.images?.[0]?.url;
+            if (coverUrl) {
+                coverContainer.innerHTML = `<img src="${coverUrl}" class="w-full h-full object-cover" alt="">`;
+            } else {
+                coverContainer.innerHTML = `<div class="w-full h-full bg-zinc-800 flex items-center justify-center"><i class="fa-solid fa-music text-5xl text-zinc-600"></i></div>`;
+            }
+
+            // Load tracks + audio features
+            const loadingHTML = `
+                <tr>
+                    <td colspan="6" class="px-6 py-12 text-center">
+                        <div class="flex flex-col items-center justify-center">
+                            <i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-500 mb-3"></i>
+                            <p class="text-sm">Loading tracks and audio features...</p>
+                            <p class="text-xs text-zinc-500 mt-1">This may take a moment for large playlists</p>
+                        </div>
+                    </td>
+                </tr>`;
+            
+            document.getElementById('tracks-tbody').innerHTML = loadingHTML;
+
+            try {
+                const rawTracks = await getAllPlaylistTracks(playlist.id);
+                const trackIds = rawTracks.map(t => t.id);
+                
+                const audioMap = await getAudioFeaturesForTracks(trackIds);
+
+                currentTracks = rawTracks.map(track => ({
+                    ...track,
+                    audio: audioMap[track.id] || null
+                }));
+
+                filteredTracks = [...currentTracks];
+                
+                renderTracksTable(filteredTracks);
+                updateTracksCount();
+                clearAnalysisPanel();
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('tracks-tbody').innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-6 py-8 text-center text-red-400">
+                            Failed to load tracks: ${error.message}
+                        </td>
+                    </tr>`;
+            }
+        }
+
+        function deselectPlaylist() {
+            currentPlaylist = null;
+            currentTracks = [];
+            filteredTracks = [];
+            selectedTrackId = null;
+            
+            document.getElementById('playlist-detail').classList.add('hidden');
+            document.getElementById('playlists-grid').classList.remove('hidden');
+            
+            // Clear search
+            document.getElementById('track-search').value = '';
+        }
+
+        function updateTracksCount() {
+            const badge = document.getElementById('tracks-count-badge');
+            if (currentTracks.length === filteredTracks.length) {
+                badge.textContent = `${currentTracks.length} tracks`;
+            } else {
+                badge.textContent = `${filteredTracks.length} / ${currentTracks.length}`;
+            }
+        }
+
+        function renderTracksTable(tracks) {
+            const tbody = document.getElementById('tracks-tbody');
+            tbody.innerHTML = '';
+
+            if (!tracks.length) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-6 py-8 text-center text-zinc-400">
+                            No tracks match your filter.
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            tracks.forEach((track, displayIndex) => {
+                // Find original index for position number
+                const originalIndex = currentTracks.findIndex(t => t.id === track.id);
+                const position = originalIndex + 1;
+
+                const artists = track.artists.map(a => a.name).join(', ');
+                const albumName = track.album?.name || '';
+                const duration = track.duration_ms ? 
+                    `${Math.floor(track.duration_ms / 60000)}:${String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}` : '';
+
+                const bpm = track.audio?.tempo ? Math.round(track.audio.tempo) : '—';
+                const keyStr = track.audio?.keyString || '—';
+                const camelot = track.audio?.camelot || '—';
+
+                const isSelected = track.id === selectedTrackId;
+
+                const row = document.createElement('tr');
+                row.className = `track-row border-b border-zinc-800 last:border-b-0 ${isSelected ? 'selected' : ''}`;
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 font-mono text-xs text-zinc-400 w-12">${position}</td>
+                    
+                    <td class="px-2 py-4">
+                        <div class="flex items-center gap-x-3 min-w-0">
+                            <div class="w-9 h-9 flex-shrink-0 rounded-xl overflow-hidden bg-zinc-800">
+                                ${track.album?.images?.[2]?.url ? 
+                                    `<img src="${track.album.images[2].url}" class="w-full h-full object-cover">` : 
+                                    `<div class="w-full h-full flex items-center justify-center"><i class="fa-solid fa-music text-zinc-600 text-xs"></i></div>`
+                                }
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="font-medium text-white truncate pr-2">${track.name}</div>
+                                ${albumName ? `<div class="text-[10px] text-zinc-500 truncate">${albumName}</div>` : ''}
+                            </div>
+                        </div>
+                    </td>
+                    
+                    <td class="px-4 py-4 text-zinc-300">
+                        <div class="truncate max-w-[200px]">${artists}</div>
+                    </td>
+                    
+                    <td class="px-4 py-4 text-center">
+                        <span class="font-mono text-lg font-semibold tracking-tighter">${bpm}</span>
+                        ${bpm !== '—' ? `<span class="text-[10px] text-zinc-500 block -mt-1">BPM</span>` : ''}
+                    </td>
+                    
+                    <td class="px-4 py-4">
+                        <div>
+                            <div class="font-medium">${keyStr}</div>
+                        </div>
+                    </td>
+                    
+                    <td class="px-6 py-4 text-center">
+                        <span class="camelot-pill inline-block px-3 py-1 text-xs font-bold rounded-2xl bg-emerald-500/10 text-emerald-400">${camelot}</span>
+                    </td>
+                `;
+
+                row.onclick = () => {
+                    selectTrackForAnalysis(track.id);
+                };
+
+                tbody.appendChild(row);
+            });
+        }
+
+        function filterTracks() {
+            const query = document.getElementById('track-search').value.toLowerCase().trim();
+            
+            if (!query) {
+                filteredTracks = [...currentTracks];
+            } else {
+                filteredTracks = currentTracks.filter(track => {
+                    const nameMatch = track.name.toLowerCase().includes(query);
+                    const artistMatch = track.artists.some(a => a.name.toLowerCase().includes(query));
+                    const albumMatch = track.album?.name?.toLowerCase().includes(query);
+                    return nameMatch || artistMatch || albumMatch;
+                });
+            }
+            
+            renderTracksTable(filteredTracks);
+            updateTracksCount();
+        }
+
+        function selectTrackForAnalysis(trackId) {
+            selectedTrackId = trackId;
+            
+            // Re-render table to highlight selected row
+            renderTracksTable(filteredTracks);
+            
+            // Show analysis
+            renderAnalysisPanel();
+        }
+
+        function clearTrackSelection() {
+            selectedTrackId = null;
+            renderTracksTable(filteredTracks);
+            clearAnalysisPanel();
+        }
+
+        function clearAnalysisPanel() {
+            const container = document.getElementById('analysis-content');
+            container.innerHTML = `
+                <div class="h-full flex flex-col items-center justify-center text-center px-6 py-8">
+                    <div class="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center mb-4">
+                        <i class="fa-solid fa-link text-2xl text-zinc-600"></i>
+                    </div>
+                    <p class="font-medium text-zinc-300">Select a track</p>
+                    <p class="text-xs text-zinc-500 mt-1 max-w-[200px]">
+                        Click any row to analyze how it mixes with the tracks before and after it.
+                    </p>
+                </div>
+            `;
+            document.getElementById('selection-status').innerHTML = `No track selected`;
+            document.getElementById('selection-status').className = `text-xs px-3 py-1 rounded-2xl bg-zinc-800 text-zinc-400 font-medium`;
+        }
+
+        function renderAnalysisPanel() {
+            const container = document.getElementById('analysis-content');
+            const statusEl = document.getElementById('selection-status');
+
+            if (!selectedTrackId) {
+                clearAnalysisPanel();
+                return;
+            }
+
+            const ctx = getTrackContext(selectedTrackId);
+            if (!ctx.track) {
+                clearAnalysisPanel();
+                return;
+            }
+
+            statusEl.innerHTML = `Track <span class="font-mono">${ctx.position}</span> of ${ctx.total}`;
+            statusEl.className = `text-xs px-3 py-1 rounded-2xl bg-emerald-500/10 text-emerald-400 font-medium`;
+
+            let html = `
+                <div class="mix-analysis">
+                    <!-- Current Track -->
+                    <div class="mb-5">
+                        <div class="text-xs uppercase tracking-widest text-emerald-400 font-semibold mb-1">NOW PLAYING</div>
+                        <div class="font-semibold text-xl leading-tight">${ctx.track.name}</div>
+                        <div class="text-sm text-zinc-400">${ctx.track.artists.map(a => a.name).join(', ')}</div>
+                        
+                        <div class="flex items-center gap-x-4 mt-3 text-sm">
+                            <div>
+                                <span class="font-mono text-3xl font-semibold tracking-tighter">${ctx.track.audio?.tempo ? Math.round(ctx.track.audio.tempo) : '—'}</span>
+                                <span class="text-xs text-zinc-500 ml-0.5">BPM</span>
+                            </div>
+                            <div>
+                                <span class="font-semibold">${ctx.track.audio?.keyString || '—'}</span><br>
+                                <span class="camelot-pill text-xs px-2.5 py-px bg-emerald-500/10 text-emerald-400 rounded-xl">${ctx.track.audio?.camelot || '—'}</span>
+                            </div>
+                        </div>
+                    </div>
+            `;
+
+            // Previous Track
+            if (ctx.prev) {
+                const analysis = analyzeTransition(ctx.prev, ctx.track);
+                html += `
+                    <div class="mb-6">
+                        <div class="flex items-center gap-x-2 mb-2">
+                            <i class="fa-solid fa-arrow-up text-emerald-400"></i>
+                            <span class="text-xs font-semibold tracking-widest text-emerald-400">FROM PREVIOUS</span>
+                        </div>
+                        <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+                            <div class="font-medium text-sm mb-1">${ctx.prev.name}</div>
+                            <div class="text-xs text-zinc-400 mb-3">${ctx.prev.artists.map(a => a.name).join(', ')}</div>
+                            
+                            <div class="space-y-3 text-sm">
+                                <div>
+                                    <div class="flex justify-between text-xs mb-1">
+                                        <span class="text-zinc-400">BPM Difference</span>
+                                        <span class="font-mono font-semibold">${analysis.bpmDiff !== null ? analysis.bpmDiff.toFixed(0) : '—'}</span>
+                                    </div>
+                                    <div class="text-emerald-300 text-xs">${analysis.bpmNote}</div>
+                                </div>
+                                
+                                <div>
+                                    <div class="text-xs text-zinc-400 mb-1">Key Compatibility</div>
+                                    <div class="text-emerald-300 text-xs leading-snug">${analysis.keyNote}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="mb-6">
+                        <div class="flex items-center gap-x-2 mb-2">
+                            <i class="fa-solid fa-arrow-up text-zinc-500"></i>
+                            <span class="text-xs font-semibold tracking-widest text-zinc-500">FROM PREVIOUS</span>
+                        </div>
+                        <div class="text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+                            This is the <span class="font-medium text-white">first track</span> in the playlist.
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Next Track
+            if (ctx.next) {
+                const analysis = analyzeTransition(ctx.track, ctx.next);
+                html += `
+                    <div>
+                        <div class="flex items-center gap-x-2 mb-2">
+                            <i class="fa-solid fa-arrow-down text-emerald-400"></i>
+                            <span class="text-xs font-semibold tracking-widest text-emerald-400">INTO NEXT</span>
+                        </div>
+                        <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+                            <div class="font-medium text-sm mb-1">${ctx.next.name}</div>
+                            <div class="text-xs text-zinc-400 mb-3">${ctx.next.artists.map(a => a.name).join(', ')}</div>
+                            
+                            <div class="space-y-3 text-sm">
+                                <div>
+                                    <div class="flex justify-between text-xs mb-1">
+                                        <span class="text-zinc-400">BPM Difference</span>
+                                        <span class="font-mono font-semibold">${analysis.bpmDiff !== null ? analysis.bpmDiff.toFixed(0) : '—'}</span>
+                                    </div>
+                                    <div class="text-emerald-300 text-xs">${analysis.bpmNote}</div>
+                                </div>
+                                
+                                <div>
+                                    <div class="text-xs text-zinc-400 mb-1">Key Compatibility</div>
+                                    <div class="text-emerald-300 text-xs leading-snug">${analysis.keyNote}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div>
+                        <div class="flex items-center gap-x-2 mb-2">
+                            <i class="fa-solid fa-arrow-down text-zinc-500"></i>
+                            <span class="text-xs font-semibold tracking-widest text-zinc-500">INTO NEXT</span>
+                        </div>
+                        <div class="text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+                            This is the <span class="font-medium text-white">last track</span> in the playlist.
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        function getTrackContext(trackId) {
+            const idx = currentTracks.findIndex(t => t.id === trackId);
+            if (idx === -1) return { track: null, prev: null, next: null, position: 0, total: 0 };
+
+            return {
+                track: currentTracks[idx],
+                prev: idx > 0 ? currentTracks[idx - 1] : null,
+                next: idx < currentTracks.length - 1 ? currentTracks[idx + 1] : null,
+                position: idx + 1,
+                total: currentTracks.length
+            };
+        }
+
+        function refreshPlaylists() {
+            const grid = document.getElementById('playlists-grid');
+            grid.innerHTML = `<div class="col-span-full py-8 text-center"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Refreshing...</div>`;
+            
+            loadUserPlaylists();
+        }
+
+        // ==================== INITIALIZATION ====================
+        async function initializeApp() {
+            initTailwind();
+
+            // Check for token in URL or storage
+            const urlToken = getTokenFromUrl();
+            if (urlToken) {
+                accessToken = urlToken;
+                sessionStorage.setItem('spotify_token', accessToken);
+                // Clean the URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } else {
+                accessToken = sessionStorage.getItem('spotify_token');
+            }
+
+            if (accessToken) {
+                // Show main app
+                document.getElementById('auth-section').classList.add('hidden');
+                document.getElementById('main-app').classList.remove('hidden');
+
+                await fetchCurrentUser();
+                await loadUserPlaylists();
+            } else {
+                // Show auth screen
+                document.getElementById('auth-section').classList.remove('hidden');
+                document.getElementById('main-app').classList.add('hidden');
+            }
+
+            // Keyboard support: ESC clears selection
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && selectedTrackId) {
+                    clearTrackSelection();
+                }
+                
+                // '/' focuses search when in playlist view
+                if (e.key === '/' && !document.getElementById('playlist-detail').classList.contains('hidden')) {
+                    e.preventDefault();
+                    document.getElementById('track-search').focus();
+                }
+            });
+
+            // Easter egg / tip
+            console.log('%c[Curator] Tip: Press "/" to focus track search when viewing a playlist.', 'color:#3f3f46');
+        }
+
+        // Boot the app
+        window.onload = initializeApp;
+    </script>
+</body>
+</html>
