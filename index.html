@@ -449,10 +449,8 @@
             `;
             document.body.appendChild(banner);
 
-            // Auto-dismiss after 8 seconds for non-errors
-            if (type !== 'error') {
-                setTimeout(() => banner.remove(), 8000);
-            }
+            // Auto-dismiss after 8 seconds for warnings/info; errors auto-dismiss after 15 seconds
+            setTimeout(() => { if (banner.parentNode) banner.remove(); }, type === 'error' ? 15000 : 8000);
         }
 
         // ==================== KEY / CAMELOT HELPERS ====================
@@ -705,7 +703,7 @@
                         });
                     }
                 } catch (e) {
-                    if (e.message && (e.message.includes('403') || e.message.toLowerCase().includes('forbidden') || e.message.toLowerCase().includes('endpoint'))) {
+                    if (e.message && (e.message.includes('403') || e.message.toLowerCase().includes('forbidden'))) {
                         // Audio features endpoint is deprecated for this app — skip silently
                         audioFeaturesAvailable = false;
                         break;
