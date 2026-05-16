@@ -483,21 +483,60 @@
             return { bpmDiff, bpmNote, keyNote, compatLevel };
         }
 
-        // ==================== AUTH ====================
-        function loginWithSpotify() {
+        // ==================== AUTH (PKCE) ====================
+        function generateCodeVerifier() {
+            const array = new Uint8Array(64);
+            crypto.getRandomValues(array);
+            return btoa(String.fromCharCode(...array))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        async function generateCodeChallenge(verifier) {
+            const data = new TextEncoder().encode(verifier);
+            const digest = await crypto.subtle.digest('SHA-256', data);
+            return btoa(String.fromCharCode(...new Uint8Array(digest)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        async function loginWithSpotify() {
             if (CLIENT_ID === 'PASTE_YOUR_SPOTIFY_CLIENT_ID_HERE') {
                 alert('Please replace CLIENT_ID in the HTML with your Spotify App Client ID first.\n\nGo to developer.spotify.com → Create an app → Copy the Client ID.');
                 return;
             }
-            
-            const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&show_dialog=true`;
+
+            const verifier = generateCodeVerifier();
+            sessionStorage.setItem('pkce_verifier', verifier);
+            const challenge = await generateCodeChallenge(verifier);
+
+            const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&code_challenge_method=S256&code_challenge=${challenge}&show_dialog=true`;
             window.location.href = authUrl;
         }
 
-        function getTokenFromUrl() {
-            const hash = window.location.hash.substring(1);
-            const params = new URLSearchParams(hash);
-            return params.get('access_token');
+        async function exchangeCodeForToken(code) {
+            const verifier = sessionStorage.getItem('pkce_verifier');
+            if (!verifier) throw new Error('PKCE verifier not found');
+
+            const res = await fetch('https://accounts.spotify.com/api/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    grant_type: 'authorization_code',
+                    code,
+                    redirect_uri: REDIRECT_URI,
+                    client_id: CLIENT_ID,
+                    code_verifier: verifier
+                })
+            });
+
+            if (!res.ok) throw new Error(`Token exchange failed: ${res.status} ${res.statusText}`);
+            const data = await res.json();
+            sessionStorage.removeItem('pkce_verifier');
+            return data.access_token;
+        }
+
+        function getCodeFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('code');
         }
 
         function logout() {
@@ -1033,11 +1072,15 @@
         async function initializeApp() {
             initTailwind();
 
-            // Check for token in URL or storage
-            const urlToken = getTokenFromUrl();
-            if (urlToken) {
-                accessToken = urlToken;
-                sessionStorage.setItem('spotify_token', accessToken);
+            // Check for authorization code in URL (PKCE callback)
+            const code = getCodeFromUrl();
+            if (code) {
+                try {
+                    accessToken = await exchangeCodeForToken(code);
+                    sessionStorage.setItem('spotify_token', accessToken);
+                } catch (e) {
+                    console.error('Token exchange failed', e);
+                }
                 // Clean the URL
                 window.history.replaceState({}, document.title, window.location.pathname);
             } else {
