@@ -514,7 +514,7 @@
 
         async function exchangeCodeForToken(code) {
             const verifier = sessionStorage.getItem('pkce_verifier');
-            sessionStorage.removeItem('pkce_verifier');
+            if (!verifier) throw new Error('PKCE verifier not found');
 
             const res = await fetch('https://accounts.spotify.com/api/token', {
                 method: 'POST',
@@ -528,8 +528,9 @@
                 })
             });
 
-            if (!res.ok) throw new Error('Token exchange failed');
+            if (!res.ok) throw new Error(`Token exchange failed: ${res.status} ${res.statusText}`);
             const data = await res.json();
+            sessionStorage.removeItem('pkce_verifier');
             return data.access_token;
         }
 
