@@ -597,7 +597,7 @@
         async function loadUserPlaylists() {
             try {
                 const data = await spotifyFetch('/me/playlists?limit=50');
-                allPlaylists = (data.items || []).filter(item => item && item.id && item.name);
+                allPlaylists = (data.items || []).filter(isRenderablePlaylist);
                 renderPlaylists(allPlaylists);
             } catch (error) {
                 console.error(error);
@@ -654,6 +654,10 @@
         }
 
         // ==================== RENDERING ====================
+        function isRenderablePlaylist(item) {
+            return Boolean(item && item.id && item.name);
+        }
+
         function getPlaylistTrackTotal(playlist) {
             const total = playlist?.tracks?.total;
             if (typeof total === 'number' && Number.isFinite(total) && total >= 0) return total;
