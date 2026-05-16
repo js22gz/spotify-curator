@@ -597,7 +597,7 @@
         async function loadUserPlaylists() {
             try {
                 const data = await spotifyFetch('/me/playlists?limit=50');
-                allPlaylists = data.items || [];
+                allPlaylists = (data.items || []).filter(item => item && item.id && item.name);
                 renderPlaylists(allPlaylists);
             } catch (error) {
                 console.error(error);
@@ -664,10 +664,13 @@
             }
 
             playlistsToShow.forEach(playlist => {
+                if (!playlist) return;
+
                 const card = document.createElement('div');
                 card.className = `playlist-card group bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-3xl overflow-hidden cursor-pointer`;
                 
                 const coverUrl = playlist.images?.[0]?.url || 'https://picsum.photos/id/1015/300/300';
+                const trackTotal = Number.isFinite(playlist.tracks?.total) ? playlist.tracks.total : 0;
                 
                 card.innerHTML = `
                     <div class="relative">
@@ -677,7 +680,7 @@
                         <div class="absolute bottom-0 left-0 right-0 p-4">
                             <div class="font-semibold text-white text-[15px] leading-tight line-clamp-2 pr-2">${playlist.name}</div>
                             <div class="flex items-center justify-between mt-2">
-                                <div class="text-xs text-white/70">${playlist.tracks.total} tracks</div>
+                                <div class="text-xs text-white/70">${trackTotal} tracks</div>
                                 ${playlist.owner?.display_name ? `<div class="text-[10px] px-2 py-px bg-white/10 rounded-xl text-white/60">${playlist.owner.display_name}</div>` : ''}
                             </div>
                         </div>
@@ -713,7 +716,8 @@
             // Header
             document.getElementById('playlist-name').textContent = playlist.name;
             document.getElementById('playlist-description').textContent = playlist.description || 'No description';
-            document.getElementById('playlist-track-count').textContent = `${playlist.tracks.total} tracks`;
+            const trackTotal = Number.isFinite(playlist.tracks?.total) ? playlist.tracks.total : 0;
+            document.getElementById('playlist-track-count').textContent = `${trackTotal} tracks`;
 
             const coverContainer = document.getElementById('playlist-cover');
             const coverUrl = playlist.images?.[0]?.url;
