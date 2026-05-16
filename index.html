@@ -398,6 +398,7 @@
         const CLIENT_ID = 'e7dc4a33011346afbb6e171efb3e8c0c';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const SCOPES = 'playlist-read-collaborative playlist-read-private user-read-private';
+        const AUTH_SCOPE_VERSION = '2026-05-playlist-read-scopes-v1';
 
         // ==================== STATE ====================
         let accessToken = null;
@@ -559,6 +560,7 @@
 
         function logout() {
             sessionStorage.removeItem('spotify_token');
+            sessionStorage.removeItem('spotify_auth_scope_version');
             accessToken = null;
             currentUser = null;
             window.location.reload();
@@ -637,10 +639,10 @@
 
             while (true) {
                 const data = await spotifyFetch(
-                    `/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}&fields=items(track(id,name,artists,album(name,images),duration_ms)),next`
+                    `/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}&market=from_token`
                 );
                 
-                const validItems = data.items.filter(item => item.track && item.track.id);
+                const validItems = (data.items || []).filter(item => item.track && item.track.id);
                 tracks.push(...validItems.map(item => item.track));
                 
                 if (!data.next) break;
@@ -1116,12 +1118,18 @@
                 try {
                     accessToken = await exchangeCodeForToken(code);
                     sessionStorage.setItem('spotify_token', accessToken);
+                    sessionStorage.setItem('spotify_auth_scope_version', AUTH_SCOPE_VERSION);
                 } catch (e) {
                     console.error('Token exchange failed', e);
                 }
                 // Clean the URL
                 window.history.replaceState({}, document.title, window.location.pathname);
             } else {
+                const savedScopeVersion = sessionStorage.getItem('spotify_auth_scope_version');
+                if (savedScopeVersion !== AUTH_SCOPE_VERSION) {
+                    sessionStorage.removeItem('spotify_token');
+                    sessionStorage.removeItem('spotify_auth_scope_version');
+                }
                 accessToken = sessionStorage.getItem('spotify_token');
             }
 
