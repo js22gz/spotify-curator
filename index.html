@@ -654,6 +654,11 @@
         }
 
         // ==================== RENDERING ====================
+        function getPlaylistTrackTotal(playlist) {
+            const parsed = Number.parseInt(playlist?.tracks?.total, 10);
+            return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+        }
+
         function renderPlaylists(playlistsToShow) {
             const container = document.getElementById('playlists-grid');
             container.innerHTML = '';
@@ -668,7 +673,7 @@
                 card.className = `playlist-card group bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-3xl overflow-hidden cursor-pointer`;
                 
                 const coverUrl = playlist.images?.[0]?.url || 'https://picsum.photos/id/1015/300/300';
-                const trackTotal = Number.isFinite(playlist.tracks?.total) ? playlist.tracks.total : 0;
+                const trackTotal = getPlaylistTrackTotal(playlist);
                 
                 card.innerHTML = `
                     <div class="relative">
@@ -714,7 +719,7 @@
             // Header
             document.getElementById('playlist-name').textContent = playlist.name;
             document.getElementById('playlist-description').textContent = playlist.description || 'No description';
-            const trackTotal = Number.isFinite(playlist.tracks?.total) ? playlist.tracks.total : 0;
+            const trackTotal = getPlaylistTrackTotal(playlist);
             document.getElementById('playlist-track-count').textContent = `${trackTotal} tracks`;
 
             const coverContainer = document.getElementById('playlist-cover');
