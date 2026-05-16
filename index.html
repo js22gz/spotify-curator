@@ -655,8 +655,15 @@
 
         // ==================== RENDERING ====================
         function getPlaylistTrackTotal(playlist) {
-            const parsed = parseInt(playlist?.tracks?.total, 10);
-            return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+            const total = playlist?.tracks?.total;
+            if (typeof total === 'number' && Number.isFinite(total) && total >= 0) return total;
+
+            if (typeof total === 'string') {
+                const parsed = Number(total);
+                if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+            }
+
+            return 0;
         }
 
         function renderPlaylists(playlistsToShow) {
