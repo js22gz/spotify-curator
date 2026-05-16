@@ -25,10 +25,28 @@
         .clean-table {
             border-collapse: separate;
             border-spacing: 0;
+            border: none;
+        }
+        
+        .clean-table thead {
+            border: none;
+        }
+        
+        .clean-table thead tr {
+            border-bottom: 1px solid #27272a;
         }
         
         .clean-table tr {
             transition: background-color 0.1s ease;
+            border: none;
+        }
+        
+        .clean-table tbody tr {
+            border-bottom: 1px solid #27272a;
+        }
+        
+        .clean-table tbody tr:last-child {
+            border-bottom: none;
         }
         
         .clean-table tr:hover {
@@ -312,7 +330,7 @@
                             <div class="overflow-auto max-h-[620px]" id="table-wrapper">
                                 <table class="clean-table w-full text-sm">
                                     <thead class="sticky top-0 bg-zinc-900 z-10">
-                                        <tr class="border-b border-zinc-800">
+                                        <tr>
                                             <th class="w-12 px-6 py-4 text-left font-medium">#</th>
                                             <th class="px-2 py-4 text-left font-medium min-w-[260px]">Track</th>
                                             <th class="px-4 py-4 text-left font-medium">Artist</th>
@@ -321,7 +339,7 @@
                                             <th class="w-20 px-6 py-4 text-center font-medium">Camelot</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="tracks-tbody" class="divide-y divide-zinc-800 text-sm">
+                                    <tbody id="tracks-tbody" class="text-sm">
                                         <!-- Populated dynamically -->
                                     </tbody>
                                 </table>
@@ -371,7 +389,7 @@
     <footer class="border-t border-zinc-800 py-5 text-center">
         <div class="max-w-screen-2xl mx-auto px-8 text-xs text-zinc-500">
             Spotify Curator • MVP • Made for personal use. 
-            <span class="hidden sm:inline">Version 2026-05-, hard refresh (Ctrl+Shift+R) if you see errors.</span>
+            <span class="hidden sm:inline">Version 2026-05 • After scope update, reconnect Spotify to grant new permissions.</span>
         </div>
     </footer>
 
@@ -379,7 +397,7 @@
         // ==================== CONFIG ====================
         const CLIENT_ID = 'e7dc4a33011346afbb6e171efb3e8c0c';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
-        const SCOPES = 'playlist-read-private playlist-read-collaborative user-read-private';
+        const SCOPES = 'playlist-read-public playlist-read-private playlist-read-collaborative user-read-private';
 
         // ==================== STATE ====================
         let accessToken = null;
@@ -587,6 +605,12 @@
                 if (res.status === 401) {
                     alert('Session expired. Please reconnect your Spotify account.');
                     logout();
+                } else if (res.status === 403) {
+                    const errorData = await res.json().catch(() => ({}));
+                    const msg = errorData.error?.message || 'Forbidden';
+                    alert(`Access denied (403): ${msg}. This often happens with public playlists or insufficient permissions. Please reconnect your Spotify account to refresh scopes.`);
+                    // Do not logout automatically for 403, as it may be playlist-specific
+                    throw new Error(`Forbidden: ${msg}`);
                 }
                 const errorData = await res.json().catch(() => ({}));
                 throw new Error(errorData.error?.message || `Spotify API error: ${res.status}`);
@@ -836,7 +860,7 @@
                 const isSelected = track.id === selectedTrackId;
 
                 const row = document.createElement('tr');
-                row.className = `track-row border-b border-zinc-800 last:border-b-0 ${isSelected ? 'selected' : ''}`;
+                row.className = `track-row ${isSelected ? 'selected' : ''}`;
                 
                 row.innerHTML = `
                     <td class="px-6 py-4 font-mono text-xs text-zinc-400 w-12">${position}</td>
@@ -855,22 +879,18 @@
                             </div>
                         </div>
                     </td>
-                    
                     <td class="px-4 py-4 text-zinc-300">
                         <div class="truncate max-w-[200px]">${artists}</div>
                     </td>
-                    
                     <td class="px-4 py-4 text-center">
                         <span class="font-mono text-lg font-semibold tracking-tighter">${bpm}</span>
                         ${bpm !== '—' ? `<span class="text-[10px] text-zinc-500 block -mt-1">BPM</span>` : ''}
                     </td>
-                    
                     <td class="px-4 py-4">
                         <div>
                             <div class="font-medium">${keyStr}</div>
                         </div>
                     </td>
-                    
                     <td class="px-6 py-4 text-center">
                         <span class="camelot-pill inline-block px-3 py-1 text-xs font-bold rounded-2xl bg-emerald-500/10 text-emerald-400">${camelot}</span>
                     </td>
