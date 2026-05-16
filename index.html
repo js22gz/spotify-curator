@@ -408,6 +408,7 @@
         let currentTracks = [];
         let filteredTracks = [];
         let selectedTrackId = null;
+        let audioFeaturesAvailable = true;
 
         // ==================== TAILWIND CONFIG ====================
         function initTailwind() {
@@ -422,6 +423,36 @@
                     }
                 }
             };
+        }
+
+        // ==================== NOTIFICATIONS ====================
+        function showBanner(message, type = 'info') {
+            const existing = document.getElementById('app-banner');
+            if (existing) existing.remove();
+
+            const colors = {
+                info: 'bg-zinc-800 border-zinc-700 text-zinc-200',
+                error: 'bg-red-950 border-red-800 text-red-200',
+                warning: 'bg-amber-950 border-amber-800 text-amber-200'
+            };
+            const icons = { info: 'fa-info-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle' };
+
+            const banner = document.createElement('div');
+            banner.id = 'app-banner';
+            banner.className = `fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-x-3 px-5 py-3 rounded-2xl border shadow-xl text-sm max-w-lg ${colors[type] || colors.info}`;
+            banner.innerHTML = `
+                <i class="fa-solid ${icons[type] || icons.info} flex-shrink-0"></i>
+                <span>${message}</span>
+                <button onclick="this.closest('#app-banner').remove()" class="ml-2 opacity-60 hover:opacity-100 transition-opacity flex-shrink-0">
+                    <i class="fa-solid fa-times text-xs"></i>
+                </button>
+            `;
+            document.body.appendChild(banner);
+
+            // Auto-dismiss after 8 seconds for non-errors
+            if (type !== 'error') {
+                setTimeout(() => banner.remove(), 8000);
+            }
         }
 
         // ==================== KEY / CAMELOT HELPERS ====================
@@ -594,7 +625,7 @@
         }
 
         // ==================== API HELPERS ====================
-        async function spotifyFetch(endpoint) {
+        async function spotifyFetch(endpoint, { silent403 = false } = {}) {
             if (!accessToken) throw new Error('No access token');
 
             const res = await fetch(`https://api.spotify.com/v1${endpoint}`, {
@@ -604,18 +635,19 @@
             });
 
             if (!res.ok) {
-                if (res.status === 401) {
-                    alert('Session expired. Please reconnect your Spotify account.');
-                    logout();
-                } else if (res.status === 403) {
-                    const errorData = await res.json().catch(() => ({}));
-                    const msg = errorData.error?.message || 'Forbidden';
-                    alert(`Access denied (403): ${msg}. This often happens with public playlists or insufficient permissions. Please reconnect your Spotify account to refresh scopes.`);
-                    // Do not logout automatically for 403, as it may be playlist-specific
-                    throw new Error(`Forbidden: ${msg}`);
-                }
                 const errorData = await res.json().catch(() => ({}));
-                throw new Error(errorData.error?.message || `Spotify API error: ${res.status}`);
+                const msg = errorData.error?.message || `Spotify API error: ${res.status}`;
+
+                if (res.status === 401) {
+                    showBanner('Session expired. Please reconnect your Spotify account.', 'error');
+                    logout();
+                }
+
+                if (res.status === 403 && !silent403) {
+                    showBanner(`Access denied (403): ${msg}`, 'error');
+                }
+
+                throw new Error(msg);
             }
             return res.json();
         }
@@ -639,7 +671,7 @@
 
             while (true) {
                 const data = await spotifyFetch(
-                    `/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}&market=from_token`
+                    `/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}`
                 );
                 
                 const validItems = (data.items || []).filter(item => item.track && item.track.id);
@@ -660,7 +692,7 @@
                 const ids = batch.join(',');
                 
                 try {
-                    const data = await spotifyFetch(`/audio-features?ids=${ids}`);
+                    const data = await spotifyFetch(`/audio-features?ids=${ids}`, { silent403: true });
                     if (data.audio_features) {
                         data.audio_features.forEach(feature => {
                             if (feature && feature.id) {
@@ -673,6 +705,11 @@
                         });
                     }
                 } catch (e) {
+                    if (e.message && (e.message.includes('403') || e.message.toLowerCase().includes('forbidden') || e.message.toLowerCase().includes('endpoint'))) {
+                        // Audio features endpoint is deprecated for this app — skip silently
+                        audioFeaturesAvailable = false;
+                        break;
+                    }
                     console.warn('Failed to fetch audio features for batch', e);
                 }
             }
@@ -781,6 +818,9 @@
             
             document.getElementById('tracks-tbody').innerHTML = loadingHTML;
 
+            // Reset audio features flag for this load
+            audioFeaturesAvailable = true;
+
             try {
                 const rawTracks = await getAllPlaylistTracks(playlist.id);
                 const trackIds = rawTracks.map(t => t.id);
@@ -797,6 +837,10 @@
                 renderTracksTable(filteredTracks);
                 updateTracksCount();
                 clearAnalysisPanel();
+
+                if (!audioFeaturesAvailable) {
+                    showBanner('BPM & key data is unavailable — Spotify has deprecated this endpoint for newer apps. Track names and artists still load normally.', 'warning');
+                }
 
             } catch (error) {
                 console.error(error);
@@ -850,7 +894,7 @@
                 const originalIndex = currentTracks.findIndex(t => t.id === track.id);
                 const position = originalIndex + 1;
 
-                const artists = track.artists.map(a => a.name).join(', ');
+                const artists = (track.artists || []).map(a => a.name).join(', ') || '—';
                 const albumName = track.album?.name || '';
                 const duration = track.duration_ms ? 
                     `${Math.floor(track.duration_ms / 60000)}:${String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}` : '';
@@ -981,7 +1025,7 @@
                     <div class="mb-5">
                         <div class="text-xs uppercase tracking-widest text-emerald-400 font-semibold mb-1">NOW PLAYING</div>
                         <div class="font-semibold text-xl leading-tight">${ctx.track.name}</div>
-                        <div class="text-sm text-zinc-400">${ctx.track.artists.map(a => a.name).join(', ')}</div>
+                        <div class="text-sm text-zinc-400">${(ctx.track.artists || []).map(a => a.name).join(', ')}</div>
                         
                         <div class="flex items-center gap-x-4 mt-3 text-sm">
                             <div>
@@ -1007,7 +1051,7 @@
                         </div>
                         <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
                             <div class="font-medium text-sm mb-1">${ctx.prev.name}</div>
-                            <div class="text-xs text-zinc-400 mb-3">${ctx.prev.artists.map(a => a.name).join(', ')}</div>
+                            <div class="text-xs text-zinc-400 mb-3">${(ctx.prev.artists || []).map(a => a.name).join(', ')}</div>
                             
                             <div class="space-y-3 text-sm">
                                 <div>
@@ -1051,7 +1095,7 @@
                         </div>
                         <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
                             <div class="font-medium text-sm mb-1">${ctx.next.name}</div>
-                            <div class="text-xs text-zinc-400 mb-3">${ctx.next.artists.map(a => a.name).join(', ')}</div>
+                            <div class="text-xs text-zinc-400 mb-3">${(ctx.next.artists || []).map(a => a.name).join(', ')}</div>
                             
                             <div class="space-y-3 text-sm">
                                 <div>
