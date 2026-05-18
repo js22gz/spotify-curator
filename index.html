@@ -928,10 +928,10 @@
                     if (items.length > 0 && hitCount === 0) {
                         const firstItem = items[0];
                         const firstItemType = firstItem === null ? 'null' : typeof firstItem;
-                        const sampleKeys = (firstItem && typeof firstItem === 'object')
-                            ? Object.keys(firstItem).slice(0, RECCOBEATS_SAMPLE_KEYS_LOG_LIMIT).join(', ')
-                            : '';
-                        console.warn(`${batchLabel} — 0 tracks matched parsed Spotify IDs/audio fields. First item type: ${firstItemType}. Sample keys: ${sampleKeys || '(none)'}`);
+                        const allKeys = (firstItem && typeof firstItem === 'object') ? Object.keys(firstItem) : [];
+                        const sampleKeys = allKeys.slice(0, RECCOBEATS_SAMPLE_KEYS_LOG_LIMIT).join(', ');
+                        const truncationNote = allKeys.length > RECCOBEATS_SAMPLE_KEYS_LOG_LIMIT ? ` (+${allKeys.length - RECCOBEATS_SAMPLE_KEYS_LOG_LIMIT} more)` : '';
+                        console.warn(`${batchLabel} — 0 tracks matched parsed Spotify IDs/audio fields. First item type: ${firstItemType}. Sample keys: ${sampleKeys || '(none)'}${truncationNote}`);
                     }
 
                     console.log(`%c${batchLabel} — ${hitCount}/${batch.length} tracks resolved`, 'color:#22c55e');
