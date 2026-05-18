@@ -858,8 +858,8 @@
                 if (numeric === 0 || numeric === 1) return numeric;
                 if (typeof rawMode === 'string') {
                     const v = rawMode.trim().toLowerCase();
-                    if (v.startsWith('maj')) return 1;
-                    if (v.startsWith('min')) return 0;
+                    if (v === 'major' || v === 'maj') return 1;
+                    if (v === 'minor' || v === 'min') return 0;
                 }
                 return null;
             })();
@@ -926,8 +926,12 @@
                     }
 
                     if (items.length > 0 && hitCount === 0) {
-                        const sampleKeys = Object.keys(items[0] || {}).slice(0, RECCOBEATS_SAMPLE_KEYS_LOG_LIMIT).join(', ');
-                        console.warn(`${batchLabel} — 0 tracks matched parsed Spotify IDs/audio fields. Sample keys: ${sampleKeys || '(none)'}`);
+                        const firstItem = items[0];
+                        const firstItemType = firstItem === null ? 'null' : typeof firstItem;
+                        const sampleKeys = (firstItem && typeof firstItem === 'object')
+                            ? Object.keys(firstItem).slice(0, RECCOBEATS_SAMPLE_KEYS_LOG_LIMIT).join(', ')
+                            : '';
+                        console.warn(`${batchLabel} — 0 tracks matched parsed Spotify IDs/audio fields. First item type: ${firstItemType}. Sample keys: ${sampleKeys || '(none)'}`);
                     }
 
                     console.log(`%c${batchLabel} — ${hitCount}/${batch.length} tracks resolved`, 'color:#22c55e');
