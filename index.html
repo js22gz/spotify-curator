@@ -671,6 +671,11 @@
             }
         }
 
+        function isForbiddenError(e) {
+            return Boolean(e && e.message &&
+                (e.message.includes('403') || e.message.toLowerCase().includes('forbidden')));
+        }
+
         async function getAllPlaylistTracks(playlistId) {
             let tracks = [];
             let offset = 0;
@@ -684,9 +689,7 @@
                         { silent403: true }
                     );
                 } catch (e) {
-                    const isForbidden = e.message &&
-                        (e.message.includes('403') || e.message.toLowerCase().includes('forbidden'));
-                    if (isForbidden && tracks.length > 0) {
+                    if (isForbiddenError(e) && tracks.length > 0) {
                         // Access denied mid-pagination — return what was already fetched
                         console.warn('[Curator] Playlist tracks returned 403 mid-pagination — showing partial results.');
                         break;
@@ -993,10 +996,8 @@
 
             } catch (error) {
                 console.error(error);
-                const isForbidden = error.message &&
-                    (error.message.includes('403') || error.message.toLowerCase().includes('forbidden'));
-                const errorMsg = isForbidden
-                    ? 'Spotify returned 403 — access denied for this playlist\'s tracks. Try disconnecting and reconnecting your account to grant the required permissions.'
+                const errorMsg = isForbiddenError(error)
+                    ? "Spotify returned 403 — access denied for this playlist's tracks. Try disconnecting and reconnecting your account to grant the required permissions."
                     : `Failed to load tracks: ${error.message}`;
                 document.getElementById('tracks-tbody').innerHTML = `
                     <tr>
