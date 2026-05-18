@@ -400,6 +400,14 @@
         const SCOPES = 'playlist-read-collaborative playlist-read-private user-read-private';
         const AUTH_SCOPE_VERSION = '2026-05-playlist-read-scopes-v1';
 
+        // ReccoBeats is the primary source for audio analysis (tempo/BPM, key, mode).
+        // It accepts Spotify track IDs directly and requires no authentication.
+        // The Spotify /audio-features endpoint is kept as a secondary fallback because
+        // Spotify has deprecated it for newer apps.
+        const RECCOBEATS_BASE_URL = 'https://api.reccobeats.com/v1';
+        const RECCOBEATS_BATCH_SIZE = 40;   // Maximum IDs per request per ReccoBeats docs
+        const RECCOBEATS_RATE_LIMIT_WAIT_S = 5; // Default back-off (seconds) when no Retry-After header is present
+
         // ==================== STATE ====================
         let accessToken = null;
         let currentUser = null;
@@ -431,11 +439,12 @@
             if (existing) existing.remove();
 
             const colors = {
-                info: 'bg-zinc-800 border-zinc-700 text-zinc-200',
-                error: 'bg-red-950 border-red-800 text-red-200',
+                info:    'bg-zinc-800 border-zinc-700 text-zinc-200',
+                success: 'bg-emerald-950 border-emerald-800 text-emerald-200',
+                error:   'bg-red-950 border-red-800 text-red-200',
                 warning: 'bg-amber-950 border-amber-800 text-amber-200'
             };
-            const icons = { info: 'fa-info-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle' };
+            const icons = { info: 'fa-info-circle', success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle' };
 
             const banner = document.createElement('div');
             banner.id = 'app-banner';
@@ -681,36 +690,158 @@
             return tracks;
         }
 
+        // Extracts the Spotify track ID from a ReccoBeats track object.
+        // ReccoBeats returns href as a Spotify URL (string) or array of URLs;
+        // this helper parses whichever form is present.
+        function extractSpotifyIdFromRbTrack(rbTrack) {
+            if (rbTrack.spotifyId) return rbTrack.spotifyId;
+
+            const hrefs = Array.isArray(rbTrack.href)
+                ? rbTrack.href
+                : [rbTrack.href].filter(Boolean);
+
+            for (const url of hrefs) {
+                const match = typeof url === 'string' && url.match(/spotify\.com\/track\/([A-Za-z0-9]+)/i);
+                if (match) return match[1];
+            }
+            return null;
+        }
+
+        // Normalise a single ReccoBeats track object into the shape expected by the rest
+        // of the app: { tempo, key, mode, camelot, keyString }.
+        // Returns null only when all three audio fields (tempo, key, mode) are absent,
+        // since at least one field must be present to be meaningful for BPM/key display.
+        function normaliseRbFeature(rbTrack) {
+            const tempo = rbTrack.tempo ?? rbTrack.bpm ?? null;
+            const key   = rbTrack.key  ?? null;
+            const mode  = rbTrack.mode ?? null;
+
+            if (tempo === null && key === null && mode === null) return null; // no useful audio data
+
+            return {
+                tempo,
+                key,
+                mode,
+                camelot:   getCamelot(key, mode),
+                keyString: getKeyString(key, mode)
+            };
+        }
+
+        // Fetch audio features from ReccoBeats for a list of Spotify track IDs.
+        // Respects the 40-ID batch limit and handles 429 rate-limit responses by
+        // honouring the Retry-After header (or waiting 5 s as a safe default).
+        // Returns a map of { spotifyTrackId → normalised feature object }.
+        async function fetchReccoBeatsAudioFeatures(trackIds) {
+            const featuresMap = {};
+            if (!trackIds.length) return featuresMap;
+
+            for (let i = 0; i < trackIds.length; i += RECCOBEATS_BATCH_SIZE) {
+                const batch = trackIds.slice(i, i + RECCOBEATS_BATCH_SIZE);
+                const batchLabel = `[ReccoBeats] Batch ${Math.floor(i / RECCOBEATS_BATCH_SIZE) + 1} (${batch.length} tracks)`;
+
+                try {
+                    const url = `${RECCOBEATS_BASE_URL}/track?ids=${batch.join(',')}`;
+                    let res = await fetch(url);
+
+                    // Honour rate-limit back-off before retrying once
+                    if (res.status === 429) {
+                        const retryAfter = parseInt(res.headers.get('Retry-After') || String(RECCOBEATS_RATE_LIMIT_WAIT_S), 10);
+                        console.warn(`${batchLabel} — rate limited (429). Waiting ${retryAfter}s before retry.`);
+                        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                        res = await fetch(url);
+                    }
+
+                    if (!res.ok) {
+                        console.warn(`${batchLabel} — HTTP ${res.status}. Skipping batch.`);
+                        continue;
+                    }
+
+                    const data = await res.json();
+                    // ReccoBeats returns a top-level array of track objects.
+                    // Guard against possible envelope shapes ({ content, tracks }) in case
+                    // the API adds pagination wrappers in future versions.
+                    const items = Array.isArray(data) ? data : (data.content || data.tracks || []);
+                    if (!Array.isArray(items) || items.length === 0) {
+                        console.warn(`${batchLabel} — unexpected response shape or empty result.`);
+                    }
+
+                    let hitCount = 0;
+                    for (const rbTrack of items) {
+                        const spotifyId = extractSpotifyIdFromRbTrack(rbTrack);
+                        if (!spotifyId) continue;
+
+                        const feature = normaliseRbFeature(rbTrack);
+                        if (feature) {
+                            featuresMap[spotifyId] = feature;
+                            hitCount++;
+                        }
+                    }
+
+                    console.log(`%c${batchLabel} — ${hitCount}/${batch.length} tracks resolved`, 'color:#22c55e');
+
+                } catch (e) {
+                    console.warn(`${batchLabel} — request failed:`, e.message);
+                }
+            }
+
+            return featuresMap;
+        }
+
+        // Primary entry-point for audio features.
+        // Strategy: try ReccoBeats first (primary provider), then fall back to Spotify
+        // for any tracks that ReccoBeats did not return data for.
+        // Sets audioFeaturesAvailable = false only when neither provider returns any data.
         async function getAudioFeaturesForTracks(trackIds) {
             const featuresMap = {};
             if (!trackIds.length) return featuresMap;
 
-            for (let i = 0; i < trackIds.length; i += 100) {
-                const batch = trackIds.slice(i, i + 100);
-                const ids = batch.join(',');
-                
-                try {
-                    const data = await spotifyFetch(`/audio-features?ids=${ids}`, { silent403: true });
-                    if (data.audio_features) {
-                        data.audio_features.forEach(feature => {
-                            if (feature && feature.id) {
-                                featuresMap[feature.id] = {
-                                    ...feature,
-                                    camelot: getCamelot(feature.key, feature.mode),
-                                    keyString: getKeyString(feature.key, feature.mode)
-                                };
-                            }
-                        });
+            // ── 1. ReccoBeats (primary) ──────────────────────────────────────────────
+            console.log(`%c[ReccoBeats] Fetching audio features for ${trackIds.length} tracks…`, 'color:#22c55e;font-weight:bold');
+            const rbMap = await fetchReccoBeatsAudioFeatures(trackIds);
+            Object.assign(featuresMap, rbMap);
+
+            const rbHits  = Object.keys(rbMap).length;
+            const missing = trackIds.filter(id => !rbMap[id]);
+
+            console.log(`%c[ReccoBeats] Resolved ${rbHits}/${trackIds.length} tracks. ${missing.length} will fall back to Spotify.`, 'color:#22c55e');
+
+            // ── 2. Spotify /audio-features (fallback for any gaps) ──────────────────
+            if (missing.length > 0) {
+                console.log(`%c[Spotify] Fetching fallback audio features for ${missing.length} tracks…`, 'color:#1DB954');
+
+                for (let i = 0; i < missing.length; i += 100) {
+                    const batch = missing.slice(i, i + 100);
+                    const ids   = batch.join(',');
+
+                    try {
+                        const data = await spotifyFetch(`/audio-features?ids=${ids}`, { silent403: true });
+                        if (data.audio_features) {
+                            data.audio_features.forEach(feature => {
+                                if (feature && feature.id) {
+                                    featuresMap[feature.id] = {
+                                        tempo:     feature.tempo,
+                                        key:       feature.key,
+                                        mode:      feature.mode,
+                                        camelot:   getCamelot(feature.key, feature.mode),
+                                        keyString: getKeyString(feature.key, feature.mode)
+                                    };
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        if (e.message && (e.message.includes('403') || e.message.toLowerCase().includes('forbidden'))) {
+                            // Spotify has deprecated this endpoint for newer apps — expected failure
+                            console.warn('[Spotify] /audio-features returned 403 (deprecated). No Spotify fallback available.');
+                            break;
+                        }
+                        console.warn('[Spotify] Failed to fetch fallback audio features for batch:', e.message);
                     }
-                } catch (e) {
-                    if (e.message && (e.message.includes('403') || e.message.toLowerCase().includes('forbidden'))) {
-                        // Audio features endpoint is deprecated for this app — skip silently
-                        audioFeaturesAvailable = false;
-                        break;
-                    }
-                    console.warn('Failed to fetch audio features for batch', e);
                 }
             }
+
+            // Mark whether any audio data was ultimately obtained
+            audioFeaturesAvailable = Object.keys(featuresMap).length > 0;
+
             return featuresMap;
         }
 
@@ -816,9 +947,6 @@
             
             document.getElementById('tracks-tbody').innerHTML = loadingHTML;
 
-            // Reset audio features flag for this load
-            audioFeaturesAvailable = true;
-
             try {
                 const rawTracks = await getAllPlaylistTracks(playlist.id);
                 const trackIds = rawTracks.map(t => t.id);
@@ -836,8 +964,18 @@
                 updateTracksCount();
                 clearAnalysisPanel();
 
-                if (!audioFeaturesAvailable) {
-                    showBanner('BPM & key data is unavailable — Spotify has deprecated this endpoint for newer apps. Track names and artists still load normally.', 'warning');
+                // Determine how many tracks received audio data to give feedback.
+                const tracksWithAudio = currentTracks.filter(t => t.audio).length;
+                const totalTracks     = currentTracks.length;
+
+                if (tracksWithAudio > 0) {
+                    // ReccoBeats (or Spotify fallback) provided at least some data — quiet success message
+                    const pct = totalTracks > 0 ? Math.round((tracksWithAudio / totalTracks) * 100) : 0;
+                    const coverageNote = pct < 100 ? ` (${pct}% coverage)` : '';
+                    showBanner(`Audio analysis loaded via ReccoBeats${coverageNote} — BPM & keys ready.`, 'success');
+                } else {
+                    // Neither provider returned any data
+                    showBanner('BPM & key data could not be retrieved — both ReccoBeats and the Spotify fallback are unavailable. Track names and artists load normally.', 'warning');
                 }
 
             } catch (error) {
