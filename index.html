@@ -684,20 +684,26 @@
             while (true) {
                 let data;
                 try {
+                    // Use the current /items endpoint (the older /tracks endpoint is deprecated
+                    // and can return 403 for newer apps). additional_types=track limits results
+                    // to tracks only, excluding podcast episodes.
                     data = await spotifyFetch(
-                        `/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}`,
+                        `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}&additional_types=track`,
                         { silent403: true }
                     );
                 } catch (e) {
                     if (isForbiddenError(e) && tracks.length > 0) {
                         // Access denied mid-pagination — return what was already fetched
-                        console.warn('[Curator] Playlist tracks returned 403 mid-pagination — showing partial results.');
+                        console.warn('[Curator] Playlist items returned 403 mid-pagination — showing partial results.');
                         break;
                     }
                     throw e;
                 }
 
-                const validItems = (data.items || []).filter(item => item.track && item.track.id);
+                // Filter to tracks only (episodes have type 'episode' and lack track-specific fields)
+                const validItems = (data.items || []).filter(
+                    item => item.track && item.track.id && item.track.type === 'track'
+                );
                 tracks.push(...validItems.map(item => item.track));
 
                 if (!data.next) break;
