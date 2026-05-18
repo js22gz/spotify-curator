@@ -888,7 +888,7 @@
                 const batchLabel = `[ReccoBeats] Batch ${Math.floor(i / RECCOBEATS_BATCH_SIZE) + 1} (${batch.length} tracks)`;
 
                 try {
-                    const url = `${RECCOBEATS_BASE_URL}/track?ids=${batch.join(',')}`;
+                    const url = `${RECCOBEATS_BASE_URL}/audio-features?ids=${batch.join(',')}`;
                     let res = await fetch(url);
 
                     // Honour rate-limit back-off before retrying once
