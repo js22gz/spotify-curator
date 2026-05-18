@@ -399,6 +399,7 @@
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const SCOPES = 'playlist-read-collaborative playlist-read-private user-read-private';
         const AUTH_SCOPE_VERSION = '2026-05-playlist-read-scopes-v1';
+        const DEBUG_PREFIX = '[Curator]';
 
         // ReccoBeats is the primary source for audio analysis (tempo/BPM, key, mode).
         // It accepts Spotify track IDs directly and requires no authentication.
@@ -460,6 +461,22 @@
 
             // Auto-dismiss after 8 seconds for warnings/info; errors auto-dismiss after 15 seconds
             setTimeout(() => { if (banner.parentNode) banner.remove(); }, type === 'error' ? 15000 : 8000);
+        }
+
+        function logInfo(message, details) {
+            if (details === undefined) {
+                console.log(`${DEBUG_PREFIX} ${message}`);
+                return;
+            }
+            console.log(`${DEBUG_PREFIX} ${message}`, details);
+        }
+
+        function logWarn(message, details) {
+            if (details === undefined) {
+                console.warn(`${DEBUG_PREFIX} ${message}`);
+                return;
+            }
+            console.warn(`${DEBUG_PREFIX} ${message}`, details);
         }
 
         // ==================== KEY / CAMELOT HELPERS ====================
@@ -632,10 +649,10 @@
         }
 
         // ==================== API HELPERS ====================
-        async function spotifyFetch(endpoint, { silent403 = false } = {}) {
+        async function spotifyFetchJson(url, { silent403 = false } = {}) {
             if (!accessToken) throw new Error('No access token');
 
-            const res = await fetch(`https://api.spotify.com/v1${endpoint}`, {
+            const res = await fetch(url, {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`
                 }
@@ -659,15 +676,63 @@
             return res.json();
         }
 
+        async function spotifyFetch(endpoint, options) {
+            return spotifyFetchJson(`https://api.spotify.com/v1${endpoint}`, options);
+        }
+
+        async function loadAllUserPlaylists() {
+            const playlists = [];
+            let nextUrl = 'https://api.spotify.com/v1/me/playlists?limit=50';
+            let page = 1;
+
+            while (nextUrl) {
+                logInfo(`Loading playlist page ${page}`, nextUrl);
+                const data = await spotifyFetchJson(nextUrl);
+                const items = Array.isArray(data.items) ? data.items : [];
+
+                logInfo(`Playlist page ${page} response received`, {
+                    itemCount: items.length,
+                    total: data.total,
+                    hasNextPage: Boolean(data.next)
+                });
+
+                playlists.push(...items);
+                nextUrl = data.next || null;
+                page += 1;
+            }
+
+            return playlists;
+        }
+
         async function loadUserPlaylists() {
+            const grid = document.getElementById('playlists-grid');
+            grid.innerHTML = `<div class="col-span-full py-8 text-center"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading playlists...</div>`;
+
             try {
-                const data = await spotifyFetch('/me/playlists?limit=50');
-                allPlaylists = (data.items || []).filter(isRenderablePlaylist);
+                const rawPlaylists = await loadAllUserPlaylists();
+                const renderablePlaylists = rawPlaylists.filter(isRenderablePlaylist);
+                const skippedCount = rawPlaylists.length - renderablePlaylists.length;
+
+                if (skippedCount > 0) {
+                    logWarn(`Skipping ${skippedCount} playlists that are missing required fields.`);
+                }
+
+                allPlaylists = renderablePlaylists;
+                logInfo(`Ready to render ${allPlaylists.length} playlists`, {
+                    rawCount: rawPlaylists.length,
+                    renderableCount: renderablePlaylists.length
+                });
+
                 renderPlaylists(allPlaylists);
+
+                if (!allPlaylists.length) {
+                    showBanner('Spotify returned no renderable playlists for this account. Check the browser console for the raw playlist counts.', 'warning');
+                }
             } catch (error) {
-                console.error(error);
-                document.getElementById('playlists-grid').innerHTML = 
+                console.error(`${DEBUG_PREFIX} Failed to load playlists`, error);
+                grid.innerHTML = 
                     `<div class="col-span-full p-8 text-center text-red-400">Failed to load playlists. ${error.message}</div>`;
+                showBanner(`Failed to load playlists: ${error.message}`, 'error');
             }
         }
 
@@ -887,9 +952,10 @@
         function renderPlaylists(playlistsToShow) {
             const container = document.getElementById('playlists-grid');
             container.innerHTML = '';
+            logInfo(`Rendering ${playlistsToShow.length} playlists`);
 
             if (!playlistsToShow.length) {
-                container.innerHTML = `<div class="col-span-full py-12 text-center"><p class="text-zinc-400">No playlists found.</p></div>`;
+                container.innerHTML = `<div class="col-span-full py-12 text-center"><p class="text-zinc-400">No playlists found.</p><p class="text-xs text-zinc-500 mt-2">Open the browser console for playlist fetch diagnostics.</p></div>`;
                 return;
             }
 
@@ -1309,6 +1375,7 @@
         function refreshPlaylists() {
             const grid = document.getElementById('playlists-grid');
             grid.innerHTML = `<div class="col-span-full py-8 text-center"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Refreshing...</div>`;
+            logInfo('Manual playlist refresh requested.');
             
             loadUserPlaylists();
         }
