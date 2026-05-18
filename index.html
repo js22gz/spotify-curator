@@ -399,7 +399,7 @@
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const SCOPES = 'playlist-read-collaborative playlist-read-private user-read-private';
         const AUTH_SCOPE_VERSION = '2026-05-playlist-read-scopes-v1';
-        const DEBUG_PREFIX = '[Curator]';
+        const LOG_PREFIX = '[Curator]';
 
         // ReccoBeats is the primary source for audio analysis (tempo/BPM, key, mode).
         // It accepts Spotify track IDs directly and requires no authentication.
@@ -465,10 +465,10 @@
 
         function logWith(consoleMethod, message, details) {
             if (details === undefined) {
-                consoleMethod.call(console, `${DEBUG_PREFIX} ${message}`);
+                consoleMethod.call(console, `${LOG_PREFIX} ${message}`);
                 return;
             }
-            consoleMethod.call(console, `${DEBUG_PREFIX} ${message}`, details);
+            consoleMethod.call(console, `${LOG_PREFIX} ${message}`, details);
         }
 
         function logInfo(message, details) {
@@ -683,23 +683,22 @@
         async function loadAllUserPlaylists() {
             const playlists = [];
             let nextUrl = 'https://api.spotify.com/v1/me/playlists?limit=50';
-            let pageNumber = 1;
+            const pageSizes = [];
 
             while (nextUrl) {
-                logInfo(`Loading playlist page ${pageNumber}`);
                 const data = await spotifyFetchJson(nextUrl);
                 const items = Array.isArray(data.items) ? data.items : [];
-
-                logInfo(`Playlist page ${pageNumber} response received`, {
-                    itemCount: items.length,
-                    total: data.total,
-                    hasNextPage: Boolean(data.next)
-                });
+                pageSizes.push(items.length);
 
                 playlists.push(...items);
                 nextUrl = data.next || null;
-                pageNumber += 1;
             }
+
+            logInfo('Playlist fetch complete', {
+                pageCount: pageSizes.length,
+                itemCount: playlists.length,
+                pageSizes
+            });
 
             return playlists;
         }
@@ -726,10 +725,10 @@
                 renderPlaylists(allPlaylists);
 
                 if (!allPlaylists.length) {
-                    showBanner('Spotify returned no playlists for this account. Click refresh or check the account in Spotify.', 'warning');
+                    showBanner('Spotify returned no playlists for this account. Use the refresh button or check the account in Spotify.', 'warning');
                 }
             } catch (error) {
-                console.error(`${DEBUG_PREFIX} Failed to load playlists`, error);
+                console.error(`${LOG_PREFIX} Failed to load playlists`, error);
                 grid.innerHTML = 
                     `<div class="col-span-full p-8 text-center text-red-400">Failed to load playlists. ${error.message}</div>`;
                 showBanner(`Failed to load playlists: ${error.message}`, 'error');
