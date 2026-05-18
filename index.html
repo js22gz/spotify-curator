@@ -748,11 +748,10 @@
             while (true) {
                 let data;
                 try {
-                    // Use the current /items endpoint (the older /tracks endpoint is deprecated
-                    // and can return 403 for newer apps). additional_types=track limits results
-                    // to tracks only, excluding podcast episodes.
+                    // Use the /items endpoint. The older /tracks endpoint was deprecated
+                    // in 2024; the additional_types parameter was removed in 2026.
                     data = await spotifyFetch(
-                        `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}&additional_types=track`,
+                        `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}`,
                         { silent403: true }
                     );
                 } catch (e) {
@@ -764,11 +763,15 @@
                     throw e;
                 }
 
-                // Filter to tracks only (episodes have type 'episode' and lack track-specific fields)
-                const validItems = (data.items || []).filter(
-                    item => item.track && item.track.id && item.track.type === 'track'
-                );
-                tracks.push(...validItems.map(item => item.track));
+                // Spotify migrated the wrapper field from "track" to "item" (~Feb 2026).
+                // Support both names so the app works across the transition period.
+                // Filter to tracks only: tracks have an "artists" array; episodes do not.
+                const resolveEntry = (entry) => entry.item || entry.track;
+                const validItems = (data.items || []).filter(entry => {
+                    const t = resolveEntry(entry);
+                    return t && t.id && Array.isArray(t.artists);
+                });
+                tracks.push(...validItems.map(entry => resolveEntry(entry)));
 
                 if (!data.next) break;
                 offset += limit;
