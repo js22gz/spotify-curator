@@ -463,20 +463,20 @@
             setTimeout(() => { if (banner.parentNode) banner.remove(); }, type === 'error' ? 15000 : 8000);
         }
 
-        function logInfo(message, details) {
+        function logWith(consoleMethod, message, details) {
             if (details === undefined) {
-                console.log(`${DEBUG_PREFIX} ${message}`);
+                consoleMethod(`${DEBUG_PREFIX} ${message}`);
                 return;
             }
-            console.log(`${DEBUG_PREFIX} ${message}`, details);
+            consoleMethod(`${DEBUG_PREFIX} ${message}`, details);
+        }
+
+        function logInfo(message, details) {
+            logWith(console.log, message, details);
         }
 
         function logWarn(message, details) {
-            if (details === undefined) {
-                console.warn(`${DEBUG_PREFIX} ${message}`);
-                return;
-            }
-            console.warn(`${DEBUG_PREFIX} ${message}`, details);
+            logWith(console.warn, message, details);
         }
 
         // ==================== KEY / CAMELOT HELPERS ====================
@@ -683,14 +683,14 @@
         async function loadAllUserPlaylists() {
             const playlists = [];
             let nextUrl = 'https://api.spotify.com/v1/me/playlists?limit=50';
-            let page = 1;
+            let pageNumber = 1;
 
             while (nextUrl) {
-                logInfo(`Loading playlist page ${page}`, nextUrl);
+                logInfo(`Loading playlist page ${pageNumber}`, nextUrl);
                 const data = await spotifyFetchJson(nextUrl);
                 const items = Array.isArray(data.items) ? data.items : [];
 
-                logInfo(`Playlist page ${page} response received`, {
+                logInfo(`Playlist page ${pageNumber} response received`, {
                     itemCount: items.length,
                     total: data.total,
                     hasNextPage: Boolean(data.next)
@@ -698,7 +698,7 @@
 
                 playlists.push(...items);
                 nextUrl = data.next || null;
-                page += 1;
+                pageNumber += 1;
             }
 
             return playlists;
@@ -726,7 +726,7 @@
                 renderPlaylists(allPlaylists);
 
                 if (!allPlaylists.length) {
-                    showBanner('Spotify returned no renderable playlists for this account. Check the browser console for the raw playlist counts.', 'warning');
+                    showBanner('Spotify returned no playlists to show for this account. Try refreshing or confirm the account has playlists available.', 'warning');
                 }
             } catch (error) {
                 console.error(`${DEBUG_PREFIX} Failed to load playlists`, error);
