@@ -779,19 +779,54 @@
             return tracks;
         }
 
-        // Extracts the Spotify track ID from a ReccoBeats track object.
-        // ReccoBeats returns href as a Spotify URL (string) or array of URLs;
-        // this helper parses whichever form is present.
-        function extractSpotifyIdFromRbTrack(rbTrack) {
-            if (rbTrack.spotifyId) return rbTrack.spotifyId;
+        function isSpotifyTrackId(value) {
+            return typeof value === 'string' && /^[A-Za-z0-9]{22}$/.test(value);
+        }
 
-            const hrefs = Array.isArray(rbTrack.href)
-                ? rbTrack.href
-                : [rbTrack.href].filter(Boolean);
+        // Extracts the Spotify track ID from a ReccoBeats track object.
+        // Be tolerant of schema variants (spotifyId fields, Spotify URLs/URIs,
+        // and API href URLs that end in /track/{spotifyId}).
+        function extractSpotifyIdFromRbTrack(rbTrack) {
+            const directCandidates = [
+                rbTrack.spotifyId,
+                rbTrack.spotify_id,
+                rbTrack.spotifyTrackId,
+                rbTrack.spotify_track_id,
+                rbTrack.trackId,
+                rbTrack.track_id,
+                rbTrack.id,
+                rbTrack.uri,
+                rbTrack.spotifyUri,
+                rbTrack.spotify_uri,
+                rbTrack.track?.spotifyId,
+                rbTrack.track?.spotify_id,
+                rbTrack.track?.id,
+                rbTrack.external_urls?.spotify
+            ].filter(Boolean);
+
+            for (const value of directCandidates) {
+                if (isSpotifyTrackId(value)) return value;
+            }
+
+            const hrefs = [
+                ...(Array.isArray(rbTrack.href) ? rbTrack.href : [rbTrack.href]),
+                ...(Array.isArray(rbTrack.url) ? rbTrack.url : [rbTrack.url]),
+                ...(Array.isArray(rbTrack.urls) ? rbTrack.urls : [rbTrack.urls]),
+                rbTrack.track?.href,
+                rbTrack.track?.url
+            ].filter(Boolean);
 
             for (const url of hrefs) {
-                const match = typeof url === 'string' && url.match(/spotify\.com\/track\/([A-Za-z0-9]+)/i);
-                if (match) return match[1];
+                if (typeof url !== 'string') continue;
+
+                const spotifyUrl = url.match(/spotify\.com\/track\/([A-Za-z0-9]{22})(?:[/?#]|$)/i);
+                if (spotifyUrl) return spotifyUrl[1];
+
+                const spotifyUri = url.match(/spotify:track:([A-Za-z0-9]{22})(?:[?#].*)?$/i);
+                if (spotifyUri) return spotifyUri[1];
+
+                const trackTail = url.match(/\/track\/([A-Za-z0-9]{22})(?:[/?#]|$)/i);
+                if (trackTail) return trackTail[1];
             }
             return null;
         }
@@ -801,9 +836,29 @@
         // Returns null only when all three audio fields (tempo, key, mode) are absent,
         // since at least one field must be present to be meaningful for BPM/key display.
         function normaliseRbFeature(rbTrack) {
-            const tempo = rbTrack.tempo ?? rbTrack.bpm ?? null;
-            const key   = rbTrack.key  ?? null;
-            const mode  = rbTrack.mode ?? null;
+            const source = rbTrack.audioFeatures || rbTrack.audio_features || rbTrack.features || rbTrack.audio || rbTrack;
+            const toNumber = (value) => {
+                if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+                if (typeof value === 'string' && value.trim() !== '') {
+                    const parsed = Number(value);
+                    return Number.isFinite(parsed) ? parsed : null;
+                }
+                return null;
+            };
+
+            const tempo = toNumber(source.tempo ?? source.bpm ?? source.BPM ?? rbTrack.tempo ?? rbTrack.bpm);
+            const key   = toNumber(source.key ?? source.keyNumber ?? source.key_number ?? rbTrack.key);
+            const rawMode = source.mode ?? source.modeName ?? source.mode_name ?? rbTrack.mode;
+            const mode = (() => {
+                const numeric = toNumber(rawMode);
+                if (numeric === 0 || numeric === 1) return numeric;
+                if (typeof rawMode === 'string') {
+                    const v = rawMode.trim().toLowerCase();
+                    if (v.startsWith('maj')) return 1;
+                    if (v.startsWith('min')) return 0;
+                }
+                return null;
+            })();
 
             if (tempo === null && key === null && mode === null) return null; // no useful audio data
 
@@ -864,6 +919,11 @@
                             featuresMap[spotifyId] = feature;
                             hitCount++;
                         }
+                    }
+
+                    if (items.length > 0 && hitCount === 0) {
+                        const sampleKeys = Object.keys(items[0] || {}).slice(0, 12).join(', ');
+                        console.warn(`${batchLabel} — 0 tracks matched parsed Spotify IDs/audio fields. Sample keys: ${sampleKeys || '(none)'}`);
                     }
 
                     console.log(`%c${batchLabel} — ${hitCount}/${batch.length} tracks resolved`, 'color:#22c55e');
