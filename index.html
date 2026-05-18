@@ -465,10 +465,10 @@
 
         function logWith(consoleMethod, message, details) {
             if (details === undefined) {
-                consoleMethod(`${DEBUG_PREFIX} ${message}`);
+                consoleMethod.call(console, `${DEBUG_PREFIX} ${message}`);
                 return;
             }
-            consoleMethod(`${DEBUG_PREFIX} ${message}`, details);
+            consoleMethod.call(console, `${DEBUG_PREFIX} ${message}`, details);
         }
 
         function logInfo(message, details) {
@@ -686,7 +686,7 @@
             let pageNumber = 1;
 
             while (nextUrl) {
-                logInfo(`Loading playlist page ${pageNumber}`, nextUrl);
+                logInfo(`Loading playlist page ${pageNumber}`);
                 const data = await spotifyFetchJson(nextUrl);
                 const items = Array.isArray(data.items) ? data.items : [];
 
@@ -726,7 +726,7 @@
                 renderPlaylists(allPlaylists);
 
                 if (!allPlaylists.length) {
-                    showBanner('Spotify returned no playlists for this account. Try refreshing or confirm playlists are available.', 'warning');
+                    showBanner('Spotify returned no playlists for this account. Click refresh or check the account in Spotify.', 'warning');
                 }
             } catch (error) {
                 console.error(`${DEBUG_PREFIX} Failed to load playlists`, error);
