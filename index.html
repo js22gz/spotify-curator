@@ -408,6 +408,8 @@
         const RECCOBEATS_BASE_URL = 'https://api.reccobeats.com/v1';
         const RECCOBEATS_BATCH_SIZE = 40;   // Maximum IDs per request per ReccoBeats docs
         const RECCOBEATS_RATE_LIMIT_WAIT_S = 5; // Default back-off (seconds) when no Retry-After header is present
+        const SPOTIFY_TRACK_ID_LENGTH = 22;
+        const RECCOBEATS_SAMPLE_KEYS_LOG_LIMIT = 12;
 
         // ==================== STATE ====================
         let accessToken = null;
@@ -780,7 +782,18 @@
         }
 
         function isSpotifyTrackId(value) {
-            return typeof value === 'string' && /^[A-Za-z0-9]{22}$/.test(value);
+            return typeof value === 'string'
+                && value.length === SPOTIFY_TRACK_ID_LENGTH
+                && /^[A-Za-z0-9]+$/.test(value);
+        }
+
+        function parseFiniteNumber(value) {
+            if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+            if (typeof value === 'string' && value.trim() !== '') {
+                const parsed = Number(value);
+                return Number.isFinite(parsed) ? parsed : null;
+            }
+            return null;
         }
 
         // Extracts the Spotify track ID from a ReccoBeats track object.
@@ -819,14 +832,14 @@
             for (const url of hrefs) {
                 if (typeof url !== 'string') continue;
 
-                const spotifyUrl = url.match(/spotify\.com\/track\/([A-Za-z0-9]{22})(?:[/?#]|$)/i);
-                if (spotifyUrl) return spotifyUrl[1];
+                const spotifyUrl = url.match(/spotify\.com\/track\/([A-Za-z0-9]+)(?:[/?#]|$)/i);
+                if (spotifyUrl && isSpotifyTrackId(spotifyUrl[1])) return spotifyUrl[1];
 
-                const spotifyUri = url.match(/spotify:track:([A-Za-z0-9]{22})(?:[?#].*)?$/i);
-                if (spotifyUri) return spotifyUri[1];
+                const spotifyUri = url.match(/spotify:track:([A-Za-z0-9]+)(?:[?#].*)?$/i);
+                if (spotifyUri && isSpotifyTrackId(spotifyUri[1])) return spotifyUri[1];
 
-                const trackTail = url.match(/\/track\/([A-Za-z0-9]{22})(?:[/?#]|$)/i);
-                if (trackTail) return trackTail[1];
+                const trackTail = url.match(/\/track\/([A-Za-z0-9]+)(?:[/?#]|$)/i);
+                if (trackTail && isSpotifyTrackId(trackTail[1])) return trackTail[1];
             }
             return null;
         }
@@ -837,20 +850,11 @@
         // since at least one field must be present to be meaningful for BPM/key display.
         function normaliseRbFeature(rbTrack) {
             const source = rbTrack.audioFeatures || rbTrack.audio_features || rbTrack.features || rbTrack.audio || rbTrack;
-            const toNumber = (value) => {
-                if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-                if (typeof value === 'string' && value.trim() !== '') {
-                    const parsed = Number(value);
-                    return Number.isFinite(parsed) ? parsed : null;
-                }
-                return null;
-            };
-
-            const tempo = toNumber(source.tempo ?? source.bpm ?? source.BPM ?? rbTrack.tempo ?? rbTrack.bpm);
-            const key   = toNumber(source.key ?? source.keyNumber ?? source.key_number ?? rbTrack.key);
+            const tempo = parseFiniteNumber(source.tempo ?? source.bpm ?? source.BPM ?? rbTrack.tempo ?? rbTrack.bpm);
+            const key   = parseFiniteNumber(source.key ?? source.keyNumber ?? source.key_number ?? rbTrack.key);
             const rawMode = source.mode ?? source.modeName ?? source.mode_name ?? rbTrack.mode;
             const mode = (() => {
-                const numeric = toNumber(rawMode);
+                const numeric = parseFiniteNumber(rawMode);
                 if (numeric === 0 || numeric === 1) return numeric;
                 if (typeof rawMode === 'string') {
                     const v = rawMode.trim().toLowerCase();
@@ -922,7 +926,7 @@
                     }
 
                     if (items.length > 0 && hitCount === 0) {
-                        const sampleKeys = Object.keys(items[0] || {}).slice(0, 12).join(', ');
+                        const sampleKeys = Object.keys(items[0] || {}).slice(0, RECCOBEATS_SAMPLE_KEYS_LOG_LIMIT).join(', ');
                         console.warn(`${batchLabel} — 0 tracks matched parsed Spotify IDs/audio fields. Sample keys: ${sampleKeys || '(none)'}`);
                     }
 
