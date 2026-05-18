@@ -726,7 +726,7 @@
                 renderPlaylists(allPlaylists);
 
                 if (!allPlaylists.length) {
-                    showBanner('Spotify returned no playlists to show for this account. Try refreshing or confirm the account has playlists available.', 'warning');
+                    showBanner('Spotify returned no playlists for this account. Try refreshing or confirm playlists are available.', 'warning');
                 }
             } catch (error) {
                 console.error(`${DEBUG_PREFIX} Failed to load playlists`, error);
@@ -955,7 +955,7 @@
             logInfo(`Rendering ${playlistsToShow.length} playlists`);
 
             if (!playlistsToShow.length) {
-                container.innerHTML = `<div class="col-span-full py-12 text-center"><p class="text-zinc-400">No playlists found.</p><p class="text-xs text-zinc-500 mt-2">Open the browser console for playlist fetch diagnostics.</p></div>`;
+                container.innerHTML = `<div class="col-span-full py-12 text-center"><p class="text-zinc-400">No playlists found.</p></div>`;
                 return;
             }
 
